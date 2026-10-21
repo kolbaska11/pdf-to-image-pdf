@@ -1,0 +1,37 @@
+name: Publish v1.0.0
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: initial-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Python syntax
+        run: python -m compileall -q .
+      - name: Package and verify source ZIP
+        env:
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          mkdir -p dist
+          git archive --format=zip --prefix="${REPO_NAME}-v1.0.0/" HEAD > "dist/${REPO_NAME}-v1.0.0.zip"
+          unzip -t "dist/${REPO_NAME}-v1.0.0.zip"
+      - name: Create tagged release with ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO_NAME: ${{ github.event.repository.name }}
+        run: |
+          if gh release view v1.0.0 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "v1.0.0 already exists; leaving it unchanged."
+          else
+            TITLE=$(head -n 1 RELEASE_NOTES.md | sed 's/^# //')
+            gh release create v1.0.0 "dist/${REPO_NAME}-v1.0.0.zip" \
+              --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" \
+              --title "$TITLE" --notes-file RELEASE_NOTES.md
+          fi
